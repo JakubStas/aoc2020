@@ -67,4 +67,4 @@ fun explorePathDown(stepsRight: Int, stepsDown: Int, levelsOfForest: List<String
     return treeCount
 }
 
-fun loadInputData() = InputDataReader().readLines("day3").collect(Collectors.toList()).toMutableList()
+fun loadInputData(): List<String> = InputDataReader().readLines("day3").collect(Collectors.toList())
