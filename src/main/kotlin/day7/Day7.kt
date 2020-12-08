@@ -1,148 +1,140 @@
 package day7
 
 import InputDataReader
-import java.util.stream.Collectors
 
-val edges = mutableListOf<MutableList<Int>>()
-val vertices = mutableListOf<String>()
+// matrix of edges
+val packingRules = mutableListOf<MutableList<Int>>()
 
-fun debugVertices() = vertices.forEachIndexed { index, bagType -> println("$index - $bagType") }
+// list of vertices with their names
+val bags = mutableListOf<String>()
 
-fun debugEdges() {
-    println()
-
-    (0 until vertices.size).forEach { print(" $it ") }
-    println()
-
-    repeat(vertices.size) { print("---") }
-    println()
-
-    edges.forEachIndexed { vertexId, vertexEdges ->
-        println(
-            "${
-                vertexEdges.fold(StringBuffer()) { text, edge ->
-                    text.append(
-                        " $edge "
-                    )
-                }
-            } - $vertexId (${vertices[vertexId]})"
-        )
-    }
-}
+val bagTypeRegex = "(.*) bags contain (.*)".toRegex()
+val packingRuleRegex = """(\d+) (.*?) bags?""".toRegex()
 
 fun main() {
     loadInputData()
 
-    debugEdges()
+    printOutBags()
+    printOutPackingRules()
 
     part1()
     part2()
 }
 
-
-private fun rec(bagTypes: List<Pair<String, Int>>): Int {
-    return if (bagTypes.isEmpty()) {
-        0
-    } else {
-        bagTypes.fold(0) { count, pair -> count + pair.second + pair.second * rec(getBagsThatAreImmediatelyContainedBy(pair.first)) }
-    }
-}
-
-fun part2() {
-
-    println("[part2] Sum of bag types that must be contained by 'shiny gold': ${rec(getBagsThatAreImmediatelyContainedBy("shiny gold"))}")
-}
-
 fun part1() {
-    debugVertices()
-    debugEdges()
-
-    val bags = mutableSetOf<String>()
+    // results collection
+    val bagsThatCanContainIt = mutableSetOf<String>()
+    // processing stack
     val bagTypesToCheck = ArrayDeque<String>()
     bagTypesToCheck.add("shiny gold")
 
     // no check for cycles in this graph, yolo!
     while (bagTypesToCheck.isNotEmpty()) {
-        val parentVerticesToTraverse = getBagsThatCanImmediatelyContain(bagTypesToCheck.removeFirst())
-        bags.addAll(parentVerticesToTraverse)
+        val bagsInsideTheBagType = getBagsThatCanImmediatelyContain(bagTypesToCheck.removeFirst())
+        // add contained bags to the results set
+        bagsThatCanContainIt.addAll(bagsInsideTheBagType)
 
-        parentVerticesToTraverse
-            .filter { !bagTypesToCheck.contains(it) }
-            .forEach(bagTypesToCheck::add)
+        // make sure to only add bag types that are not already queued up in the stack
+        bagsInsideTheBagType.filter { !bagTypesToCheck.contains(it) }.forEach(bagTypesToCheck::add)
     }
 
-    println("[part1] Sum of bag types that can contain 'shiny gold': ${bags.size}")
+    println("[part1] Sum of bag types that can contain 'shiny gold': ${bagsThatCanContainIt.size}")
+}
+
+fun part2() {
+    println(
+        "[part2] Sum of bag types that must be contained by 'shiny gold': ${
+            calculateTotalNestingCapacityOf(
+                getBagsThatAreImmediatelyContainedBy("shiny gold")
+            )
+        }"
+    )
 }
 
 fun loadInputData() =
-    InputDataReader().readLines("day7")
-        .map { it.substring(0, it.length - 1) }
-        .map { processInputIntoMatrix(it) }
-        .collect(Collectors.toList())
+    InputDataReader().readLines("day7").map { it.substring(0, it.length - 1) }.forEach { processInputIntoMatrix(it) }
 
 fun processInputIntoMatrix(line: String) {
-    val outerBagType = line.split("bags contain")[0].trim()
+    val outerBagType = bagTypeRegex.matchEntire(line)!!.groupValues[1]
     val indexOfOuterBagType = getIndexOrRegisterBagType(outerBagType)
 
-    val containedBagsLine = line.split("bags contain")[1].trim()
-
-    if (containedBagsLine.contains("no other bags")) {
+    if (line.contains("no other bags")) {
         // no need to do anything for no other bags
         return
     }
 
-    containedBagsLine.split(',').forEach { rawRule ->
-        val ruleWithUnits = rawRule.trim()
+    packingRuleRegex.findAll(bagTypeRegex.matchEntire(line)!!.groupValues[2])
+        .map { it.groupValues[1].toInt() to it.groupValues[2] }.forEach { pair ->
+            val quantity = pair.first
+            val bagType = pair.second
 
-        val rule = if (ruleWithUnits.endsWith("bags")) {
-            ruleWithUnits.substring(0, ruleWithUnits.length - 5)
-        } else {
-            ruleWithUnits.substring(0, ruleWithUnits.length - 4)
+            val indexOfBagType = getIndexOrRegisterBagType(bagType)
+            packingRules[indexOfOuterBagType][indexOfBagType] = quantity
         }
+}
 
-        val quantity = rule.substring(0, rule.indexOf(' ')).toInt()
-        val bagType = rule.substring(rule.indexOf(' '), rule.length).trim()
-
-        val indexOfBagType = getIndexOrRegisterBagType(bagType)
-        edges[indexOfOuterBagType][indexOfBagType] = quantity
+private fun calculateTotalNestingCapacityOf(bagTypes: List<Pair<String, Int>>): Int {
+    return if (bagTypes.isEmpty()) {
+        0
+    } else {
+        bagTypes.fold(0) { totalNestingCapacity, packingRule ->
+            totalNestingCapacity + packingRule.second + packingRule.second * calculateTotalNestingCapacityOf(
+                getBagsThatAreImmediatelyContainedBy(
+                    packingRule.first
+                )
+            )
+        }
     }
 }
+
+private fun getBagsThatCanImmediatelyContain(bagType: String) =
+    packingRules.withIndex()
+        .filter { (_, packingRules) -> packingRules[getIndexOrRegisterBagType(bagType)] > 0 }
+        .map { (bagIndex, _) -> bags[bagIndex] }
+
+private fun getBagsThatAreImmediatelyContainedBy(bagType: String) =
+    packingRules[getIndexOrRegisterBagType(bagType)].withIndex()
+        .filter { (_, packingCount) -> packingCount > 0 }
+        .map { (bagIndex, packingCount) -> Pair(bags[bagIndex], packingCount) }
 
 private fun getIndexOrRegisterBagType(bagType: String): Int {
-    if (!vertices.contains(bagType)) {
+    if (!bags.contains(bagType)) {
         // register new bag type
-        vertices.add(bagType)
-        // add graph edge option to link to it from other bags
-        edges.forEach { it.add(0) }
-        // add its own links
-        edges.add(MutableList(vertices.size) { 0 })
+        bags.add(bagType)
+        // add slot for packing rules that contain this bag
+        packingRules.forEach { it.add(0) }
+        // add slot for packing rules of this bag
+        packingRules.add(MutableList(bags.size) { 0 })
     }
 
-    return vertices.indexOf(bagType)
+    return bags.indexOf(bagType)
 }
 
-private fun getBagsThatCanImmediatelyContain(bagType: String): List<String> {
-    val leafBagTypeIndex = getIndexOrRegisterBagType(bagType)
-    val results = mutableListOf<String>()
+fun printOutBags() = bags.forEachIndexed { index, type -> println("$index - $type") }
 
-    for ((vertexIndex, vertexEdges) in edges.withIndex()) {
-        if (vertexEdges[leafBagTypeIndex] > 0) {
-            results.add(vertices[vertexIndex])
-        }
+fun printOutPackingRules() {
+    println()
+
+    // print bag indices
+    (0 until bags.size).forEach { print(" $it ") }
+    println()
+
+    // print divider
+    repeat(bags.size) { print("---") }
+    println()
+
+    // print the matrix of packing rules
+    packingRules.forEachIndexed { bagIndex, packingRules ->
+        println(
+            "${
+                packingRules.fold(StringBuffer()) { text, capacity ->
+                    text.append(
+                        " $capacity "
+                    )
+                }
+            } - $bagIndex (${bags[bagIndex]})"
+        )
     }
 
-    return results
-}
-
-private fun getBagsThatAreImmediatelyContainedBy(bagType: String): List<Pair<String, Int>> {
-    val rootBagTypeIndex = getIndexOrRegisterBagType(bagType)
-    val results = mutableListOf<Pair<String, Int>>()
-
-    for ((vertexIndex, edgeWeight) in edges[rootBagTypeIndex].withIndex()) {
-        if (edgeWeight > 0) {
-            results.add(Pair(vertices[vertexIndex], edgeWeight))
-        }
-    }
-
-    return results
+    println()
 }

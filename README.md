@@ -7,3 +7,5 @@ Daily problems:
 - [Day 4](src/main/kotlin/day4/Day4.kt)
 - [Day 5](src/main/kotlin/day5/Day5.kt)
 - [Day 6](src/main/kotlin/day6/Day6.kt)
+- [Day 7](src/main/kotlin/day7/Day7.kt)
+- [Day 8](src/main/kotlin/day8/Day8.kt)
